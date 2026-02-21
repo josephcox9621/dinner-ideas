@@ -4,58 +4,27 @@
   <meta charset="UTF-8" />
   <title>Dinner Ideas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- PWA manifest -->
   <link rel="manifest" href="manifest.json">
 
   <style>
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
       font-family: system-ui, sans-serif;
       background: #f4f4f6;
       color: #222;
     }
-
-    .container {
-      max-width: 600px;
-      margin: auto;
-      padding: 1rem;
-    }
-
-    h1 { text-align: center; margin-bottom: 1rem; }
-
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.06);
-    }
-
+    .container { max-width: 600px; margin: auto; padding: 1rem; }
+    h1 { text-align: center; margin-bottom: 0.5rem; }
+    .card { background: white; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.06); }
     .card img { width: 100%; border-radius: 10px; margin-bottom: 0.5rem; }
-
-    .tags { font-size: 0.85rem; color: #555; margin-bottom: 0.5rem; }
-
-    button {
-      width: 100%;
-      padding: 0.8rem;
-      font-size: 1rem;
-      border-radius: 12px;
-      border: none;
-      background: #4f46e5;
-      color: white;
-      margin-top: 0.5rem;
-    }
-
+    button { width: 100%; padding: 0.8rem; font-size: 1rem; border-radius: 12px; border: none; background: #4f46e5; color: white; margin-top: 0.5rem; }
     form label { display: block; font-weight: 600; margin-top: 0.8rem; }
-    form input, form textarea {
-      width: 100%; padding: 0.6rem; margin-top: 0.3rem;
-      border-radius: 8px; border: 1px solid #ccc; font-size: 1rem;
-    }
+    form input, form textarea { width: 100%; padding: 0.6rem; margin-top: 0.3rem; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; }
     form textarea { resize: vertical; }
     .hidden { display: none; }
+    #search { margin-top: 1rem; margin-bottom: 1rem; padding: 0.6rem; border-radius: 8px; border: 1px solid #ccc; width: 100%; font-size: 1rem; }
+    mark { background-color: #ffe58f; }
   </style>
 </head>
 <body>
@@ -63,58 +32,46 @@
 <div class="container">
   <h1>🍽️ Dinner Ideas</h1>
 
-  <div id="list"></div>
-
+  <!-- Add Dinner button -->
   <button onclick="toggleForm()">➕ Add Dinner</button>
+
+  <!-- Gap between button and search -->
+  <div style="height: 1rem;"></div>
+
+  <!-- Search input -->
+  <input id="search" type="text" placeholder="Search dinners (multiple words allowed)" />
 
   <!-- Add Dinner Form -->
   <form id="form" class="card hidden">
     <label>Name
       <input id="name" required />
     </label>
-
-    <label>Tags (select or type new)
-      <input id="tags" list="tag-options" placeholder="e.g. quick, pasta" />
-      <datalist id="tag-options"></datalist>
-    </label>
-
     <label>Photo
       <input id="photo" type="file" accept="image/*" capture="environment" />
     </label>
-
     <label>Recipe
       <textarea id="recipe" rows="3"></textarea>
     </label>
-
     <label>Notes
       <textarea id="notes" rows="2"></textarea>
     </label>
-
     <button type="submit">Save Dinner</button>
   </form>
+
+  <!-- Dinner list -->
+  <div id="list"></div>
 </div>
 
 <script>
   const dinners = [];
-  const knownTags = new Set();
   const list = document.getElementById("list");
   const form = document.getElementById("form");
-  const tagOptions = document.getElementById("tag-options");
+  const searchInput = document.getElementById("search");
 
-  // --- Local Storage functions ---
-  function saveToLocalStorage() {
-    localStorage.setItem("dinners", JSON.stringify(dinners));
-  }
-
+  function saveToLocalStorage() { localStorage.setItem("dinners", JSON.stringify(dinners)); }
   function loadFromLocalStorage() {
     const stored = localStorage.getItem("dinners");
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      parsed.forEach(d => {
-        dinners.push(d);
-        d.tags.forEach(t => knownTags.add(t));
-      });
-    }
+    if (stored) JSON.parse(stored).forEach(d => dinners.push(d));
   }
 
   loadFromLocalStorage();
@@ -122,9 +79,25 @@
 
   function toggleForm() { form.classList.toggle("hidden"); }
 
-  function render() {
+  function escapeRegExp(string) { return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function highlightMultiple(text, keywords) {
+    if (!keywords.length) return text;
+    const escaped = keywords.map(escapeRegExp).join('|');
+    const re = new RegExp(`(${escaped})`, 'gi');
+    return text.replace(re, '<mark>$1</mark>');
+  }
+
+  function render(filter = "") {
+    const keywords = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
     list.innerHTML = "";
-    dinners.forEach(d => {
+
+    const filtered = dinners.filter(d => {
+      const text = (d.name + " " + d.recipe + " " + d.notes).toLowerCase();
+      return keywords.every(k => text.includes(k));
+    });
+
+    filtered.forEach(d => {
       const card = document.createElement("div");
       card.className = "card";
 
@@ -135,35 +108,23 @@
       }
 
       card.innerHTML += `
-        <h2>${d.name}</h2>
-        <div class="tags">${d.tags.join(", ")}</div>
-        <p><strong>Recipe:</strong> ${d.recipe || "-"}</p>
-        <p><strong>Notes:</strong> ${d.notes || "-"}</p>
+        <h2>${highlightMultiple(d.name, keywords)}</h2>
+        <p><strong>Recipe:</strong> ${highlightMultiple(d.recipe || "-", keywords)}</p>
+        <p><strong>Notes:</strong> ${highlightMultiple(d.notes || "-", keywords)}</p>
       `;
       list.appendChild(card);
-    });
-
-    tagOptions.innerHTML = "";
-    knownTags.forEach(tag => {
-      const opt = document.createElement("option");
-      opt.value = tag;
-      tagOptions.appendChild(opt);
     });
   }
 
   form.addEventListener("submit", async e => {
     e.preventDefault();
     const name = document.getElementById("name").value;
-    const tags = document.getElementById("tags").value.split(",").map(t => t.trim()).filter(Boolean);
-    tags.forEach(t => knownTags.add(t));
-
     const photoFile = document.getElementById("photo").files[0];
     let photoData = null;
     if (photoFile) photoData = await toBase64(photoFile);
 
-    dinners.push({
+    dinners.unshift({
       name,
-      tags,
       photo: photoData,
       recipe: document.getElementById("recipe").value,
       notes: document.getElementById("notes").value
@@ -172,7 +133,7 @@
     saveToLocalStorage();
     form.reset();
     form.classList.add("hidden");
-    render();
+    render(searchInput.value);
   });
 
   function toBase64(file) {
@@ -183,21 +144,18 @@
     });
   }
 
-  // --- PWA install prompt ---
+  searchInput.addEventListener("input", () => render(searchInput.value));
+
+  // PWA install prompt
   let deferredPrompt;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     console.log("PWA install available");
   });
-</script>
 
-<!-- --- Service Worker Registration --- -->
-<script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(() => {
-      console.log('Service Worker registered');
-    });
+    navigator.serviceWorker.register('sw.js').then(() => console.log('Service Worker registered'));
   }
 </script>
 
